@@ -553,9 +553,28 @@ function loanInfo(c,key){
     if(m<key)prior+=t.amount;else if(m===key)thisM+=t.amount;
   });
   var start=Math.max(0,r2(total-before-prior)),end=Math.max(0,r2(start-thisM));
-  var left=monthly>0&&start>0?Math.ceil(start/monthly-1e-9):0;
-  return {total:total,monthly:monthly,paidThisMonth:r2(thisM),start:start,end:end,left:left,
+  var leftStart=monthly>0&&start>0?Math.ceil(start/monthly-1e-9):0;
+  var left=monthly>0&&end>0?Math.ceil(end/monthly-1e-9):0;
+  return {total:total,monthly:monthly,paidThisMonth:r2(thisM),start:start,end:end,left:left,leftStart:leftStart,
     due:Math.max(0,r2(Math.min(monthly,start)-thisM))};
+}
+/* balance and payments left across every payment logged so far, for the Personalize screen */
+function loanNow(c){
+  var L=c.loan||{},paid=0;
+  S.tx.forEach(function(t){if(t.type==='expense'&&t.cat===c.id)paid+=t.amount;});
+  var bal=Math.max(0,r2((L.total||0)-(L.paidBefore||0)-paid)),m=c.budget||0;
+  return {balance:bal,left:m>0&&bal>0?Math.ceil(bal/m-1e-9):0,monthly:m,total:L.total||0};
+}
+function loanSumText(c){
+  var n=loanNow(c);
+  if(!(n.total>0&&n.monthly>0))return 'Enter the total and monthly payment to see payments left.';
+  if(n.balance<=0)return 'Paid off. No payments left.';
+  return 'Balance '+fmt(n.balance)+' · '+n.left+' payment'+(n.left===1?'':'s')+' left';
+}
+function updateLoanSums(){
+  Array.prototype.forEach.call(document.querySelectorAll('.loan-sum'),function(el){
+    var c=S.categories.find(function(x){return x.id===el.dataset.id;});if(c&&c.loan)el.textContent=loanSumText(c);
+  });
 }
 function finishLabel(key,left){
   var p=key.split('-').map(Number),d=new Date(p[0],p[1]-1+left-1,1);
@@ -569,21 +588,21 @@ function loansHtml(key){
       return '<li class="loan"><div class="loan-head"><h3>'+name+'</h3></div><p class="sub">Set the total loan amount and monthly payment under Personalize to track this loan.</p></li>';
     }
     var paidPct=Math.min(100,Math.max(0,(i.total-i.end)/i.total*100)),pill;
-    if(i.start<=0&&i.paidThisMonth<=0)pill='<span class="pill good">Paid off</span>';
+    if(i.end<=0)pill='<span class="pill good">Paid off</span>';
     else if(i.due<=0)pill='<span class="pill good">Paid this month</span>';
     else if(i.paidThisMonth>0)pill='<span class="pill warn">Part paid, '+fmt(i.due)+' due</span>';
     else pill='<span class="pill">Due '+fmt(i.due)+'</span>';
-    var note=(i.paidThisMonth>0?'Paid '+fmt(i.paidThisMonth)+' this month, leaving '+fmt(i.end)+'. ':'')+(i.left>0?finishLabel(key,i.left):'');
+    var note=(i.paidThisMonth>0?'Paid '+fmt(i.paidThisMonth)+' this month, leaving '+fmt(i.end)+'. ':'')+(i.leftStart>0?finishLabel(key,i.leftStart):'');
     return '<li class="loan"><div class="loan-head"><h3>'+name+'</h3>'+pill+'</div>'+
       '<div class="bar" role="img" aria-label="'+Math.round(paidPct)+'% of the loan paid"><i style="width:'+paidPct+'%;background:'+c.color+'"></i></div>'+
-      '<div class="loan-nums"><div><p class="eyebrow">Balance</p><p class="num">'+fmt(i.start)+'</p></div>'+
+      '<div class="loan-nums"><div><p class="eyebrow">Balance</p><p class="num">'+fmt(i.end)+'</p></div>'+
       '<div><p class="eyebrow">Payments left</p><p class="num">'+i.left+'</p></div>'+
       '<div><p class="eyebrow">Monthly</p><p class="num">'+fmt(i.monthly)+'</p></div></div>'+
       (note?'<p class="sub">'+esc(note)+'</p>':'')+
       (i.due>0?'<div class="actions"><button type="button" class="btn sm primary" data-act="loan-pay" data-id="'+esc(c.id)+'">Mark '+esc(fmt(i.due))+' as paid</button></div>':'')+'</li>';
   }).join('');
   return '<section class="card"><div class="card-head"><h2>Loans</h2><span class="sub">'+esc(monthLabel(key))+'</span></div><ul class="plain">'+items+'</ul>'+
-    '<p class="form-hint">Balance is what you owed at the start of the month. Payments you log in a loan’s category lower it from the next month on.</p></section>';
+    '<p class="form-hint">Balance and payments left are worked out after the payments recorded up to the end of this month. Mark as paid, or log a payment in the loan’s category, and both update straight away.</p></section>';
 }
 function loanEditRows(){
   var cats=loanCats();
@@ -593,6 +612,7 @@ function loanEditRows(){
     return '<div class="loan-edit"><div class="cat-edit" style="margin-bottom:10px"><input type="color" data-bind="cat-color" data-id="'+id+'" value="'+esc(c.color)+'" aria-label="Color for '+esc(c.name)+'">'+
       '<input type="text" data-bind="cat-name" data-id="'+id+'" value="'+esc(c.name)+'" maxlength="40" aria-label="Loan name">'+
       '<span></span><button type="button" class="icon-btn" data-act="cat-del" data-id="'+id+'" aria-label="Delete '+esc(c.name)+'">&times;</button></div>'+
+      '<p class="loan-sum sub" data-id="'+id+'" role="status" style="margin:0 0 10px;font-weight:600">'+esc(loanSumText(c))+'</p>'+
       '<div class="form-grid"><label class="f">Total loan amount<input type="number" step="any" min="0" data-bind="loan-total" data-id="'+id+'" value="'+(L.total||'')+'" placeholder="0"></label>'+
       '<label class="f">Monthly payment<input type="number" step="any" min="0" data-bind="cat-budget" data-id="'+id+'" value="'+(c.budget||'')+'" placeholder="0"></label>'+
       '<label class="f">Already paid before tracking<input type="number" step="any" min="0" data-bind="loan-paid" data-id="'+id+'" value="'+(L.paidBefore||'')+'" placeholder="0"></label></div></div>';
@@ -806,7 +826,7 @@ function renderPersonalize(){
         '<p class="form-hint">A monthly budget adds a progress bar on the Overview. Deleting a category keeps its entries as Uncategorized.</p>'+
         '<h3 class="sub-head">Loans</h3>'+loanEditRows()+
         '<button type="button" class="btn" data-act="loan-add" style="margin-top:8px">Add loan</button>'+
-        '<p class="form-hint">A loan is also a spending category. Log each payment as an expense in it, or press Mark as paid on the Overview. Next month shows the lower balance and one fewer payment left.</p></section>'+
+        '<p class="form-hint">A loan is also a spending category. Payments left is worked out for you. Press Mark as paid on the Overview, or log a payment in the loan’s category, and the balance and payments left drop right away.</p></section>'+
     '</div>';
 }
 
@@ -1419,6 +1439,10 @@ Object.assign(ACTS,{
 Object.assign(BINDS,{
   'loan-total':function(t){var c=S.categories.find(function(x){return x.id===t.dataset.id;});if(c&&c.loan){var v=parseFloat(t.value);c.loan.total=isFinite(v)&&v>0?r2(v):0;save();}},
   'loan-paid':function(t){var c=S.categories.find(function(x){return x.id===t.dataset.id;});if(c&&c.loan){var v=parseFloat(t.value);c.loan.paidBefore=isFinite(v)&&v>0?r2(v):0;save();}}
+});
+document.addEventListener('change',function(e){
+  var b=e.target&&e.target.dataset&&e.target.dataset.bind;
+  if(b==='loan-total'||b==='loan-paid'||b==='cat-budget')setTimeout(updateLoanSums,0);
 });
 document.addEventListener('change',function(e){
   if(!e.target||e.target.id!=='fCat')return;
