@@ -1,5 +1,5 @@
 /* Payday Ledger offline cache. Change CACHE when you want every device to refetch the files. */
-var CACHE='payday-ledger-v4';
+var CACHE='payday-ledger-v5';
 var SHELL=['./','./index.html','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png'];
 
 self.addEventListener('install',function(e){

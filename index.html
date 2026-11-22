@@ -267,6 +267,12 @@ table.slip-table{width:100%;border-collapse:collapse;font-size:14px;font-variant
   .bar>i{transition:width .3s ease}
   .progress i{animation:slide 1.4s ease-in-out infinite}
 }
+
+.sv-sum{margin:14px 0 4px;display:grid;gap:6px}
+.sv-sum div{display:flex;justify-content:space-between;gap:12px;font-size:14px}
+.sv-sum dt{color:var(--ink-2)}.sv-sum dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums}
+.sv-sum .tot{border-top:1px solid var(--line);padding-top:8px;margin-top:2px;font-size:16px}
+.sv-sum .tot dt{color:var(--ink);font-weight:600}
 </style>
 </head>
 <body>
@@ -758,7 +764,7 @@ function renderSavings(){
   var st=monthStats(ui.month);
   var total=0,byGoal={};
   S.tx.forEach(function(t){if(t.type==='saving'){total+=t.amount;var k=goalOf(t.goal)?t.goal:'';byGoal[k]=(byGoal[k]||0)+t.amount;}});
-  var start=+S.profile.savingsStart||0;
+  var start=+S.profile.savingsStart||0,tracked=total;
   total+=start;
   var pct=st.target>0?Math.min(100,st.saved/st.target*100):0;
   var goals=S.goals.map(function(g){
@@ -783,7 +789,8 @@ function renderSavings(){
       '<div class="bar" style="margin-top:14px" role="img" aria-label="'+Math.round(pct)+'% of this month’s savings target"><i style="width:'+pct+'%;background:var(--accent)"></i></div></div>'+
     '<section class="card"><div class="card-head"><h2>Savings before tracking</h2></div>'+
       '<label class="f">Amount you had saved when you started<input type="number" data-bind="p-savestart" value="'+(start||'')+'" step="any" min="0" placeholder="0"></label>'+
-      '<p class="form-hint">Added to Saved so far. It does not count toward this month’s savings target or your goals.</p></section>'+
+      '<dl class="sv-sum"><div><dt>Before tracking</dt><dd>'+fmt(start)+'</dd></div><div><dt>Saved in the app</dt><dd>'+fmt(tracked)+'</dd></div><div class="tot"><dt>Total savings</dt><dd>'+fmt(total)+'</dd></div></dl>'+
+      '<p class="form-hint">Each time you add savings, the total goes up. The amount before tracking does not count toward this month’s target or your goals.</p></section>'+
     '<div class="grid-2">'+
       '<section class="card"><div class="card-head"><h2>Goals</h2></div>'+
         (goals?'<ul class="plain">'+goals+'</ul>':'<p class="muted">No goals yet. Name something you’re saving for and set a target.</p>')+
