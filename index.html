@@ -382,7 +382,7 @@ function compact(n){return nf({notation:'compact',maximumFractionDigits:1}).form
 function defaults(){
   return {
     v:1,savedAt:0,sample:false,
-    profile:{name:'',currency:'USD',accent:'#0C7C7E',salary:0,pct:20},
+    profile:{name:'',currency:'USD',accent:'#0C7C7E',salary:0,pct:20,savingsStart:0},
     salaryByMonth:{},
     categories:[
       {id:'housing',name:'Housing',color:PALETTE[0],budget:0},
@@ -758,6 +758,8 @@ function renderSavings(){
   var st=monthStats(ui.month);
   var total=0,byGoal={};
   S.tx.forEach(function(t){if(t.type==='saving'){total+=t.amount;var k=goalOf(t.goal)?t.goal:'';byGoal[k]=(byGoal[k]||0)+t.amount;}});
+  var start=+S.profile.savingsStart||0;
+  total+=start;
   var pct=st.target>0?Math.min(100,st.saved/st.target*100):0;
   var goals=S.goals.map(function(g){
     var saved=byGoal[g.id]||0,p=g.target>0?Math.min(100,saved/g.target*100):0,rem=Math.max(0,g.target-saved);
@@ -776,8 +778,12 @@ function renderSavings(){
   }).join('');
   el.innerHTML=
     '<div class="card hero"><p class="eyebrow">Saved so far</p><p class="big">'+fmt(total)+'</p>'+
+      (start>0?'<p class="muted">Includes '+fmt(start)+' you had saved before tracking.</p>':'')+
       '<p class="muted">'+fmt(st.saved)+' saved in '+esc(monthLabel(ui.month))+', target '+fmt(st.target)+' ('+S.profile.pct+'% of income)</p>'+
       '<div class="bar" style="margin-top:14px" role="img" aria-label="'+Math.round(pct)+'% of this month’s savings target"><i style="width:'+pct+'%;background:var(--accent)"></i></div></div>'+
+    '<section class="card"><div class="card-head"><h2>Savings before tracking</h2></div>'+
+      '<label class="f">Amount you had saved when you started<input type="number" data-bind="p-savestart" value="'+(start||'')+'" step="any" min="0" placeholder="0"></label>'+
+      '<p class="form-hint">Added to Saved so far. It does not count toward this month’s savings target or your goals.</p></section>'+
     '<div class="grid-2">'+
       '<section class="card"><div class="card-head"><h2>Goals</h2></div>'+
         (goals?'<ul class="plain">'+goals+'</ul>':'<p class="muted">No goals yet. Name something you’re saving for and set a target.</p>')+
@@ -813,6 +819,7 @@ function renderPersonalize(){
           '<label class="f">Currency<select data-bind="p-cur">'+curOpts+'</select></label>'+
           '<label class="f">Monthly salary<input type="number" data-bind="p-salary" value="'+(S.profile.salary||'')+'" step="any" min="0" placeholder="0"></label>'+
           '<label class="f">Savings target, % of income<input type="number" data-bind="p-pct" value="'+S.profile.pct+'" step="1" min="0" max="100"></label>'+
+          '<label class="f">Savings before tracking<input type="number" data-bind="p-savestart" value="'+(S.profile.savingsStart||'')+'" step="any" min="0" placeholder="0"></label>'+
           '<p class="form-hint">Your salary applies to every month. Payslips you add replace it for their month, and Edit on the Overview tab changes one month by hand.</p>'+
         '</div></section>'+
         '<section class="card"><div class="card-head"><h2>Accent color</h2></div><div class="swatches">'+sw+
@@ -1397,6 +1404,8 @@ var BINDS={
   'p-cur':function(t){S.profile.currency=t.value;save();},
   'p-salary':function(t){var v=parseFloat(t.value);S.profile.salary=isFinite(v)&&v>=0?r2(v):0;if(S.sample)toast('Salary updated');save();},
   'p-pct':function(t){var v=parseFloat(t.value);v=isFinite(v)?Math.min(100,Math.max(0,v)):0;S.profile.pct=v;t.value=v;save();},
+  'p-savestart':function(t){var v=parseFloat(t.value);S.profile.savingsStart=isFinite(v)&&v>0?r2(v):0;t.value=S.profile.savingsStart||'';save();
+    if(ui.tab==='savings'){renderSavings();drawSavings();}},
   'p-accent':function(t){S.profile.accent=t.value;applyAccent();save();renderPersonalize();},
   'cat-color':function(t){var c=S.categories.find(function(x){return x.id===t.dataset.id;});if(c){c.color=t.value;save();}},
   'cat-name':function(t){var c=S.categories.find(function(x){return x.id===t.dataset.id;});if(c){c.name=t.value.trim()||c.name;t.value=c.name;save();}},
