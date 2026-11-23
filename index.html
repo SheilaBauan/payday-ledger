@@ -764,21 +764,23 @@ function renderSavings(){
   var st=monthStats(ui.month);
   var total=0,byGoal={};
   S.tx.forEach(function(t){if(t.type==='saving'){total+=t.amount;var k=goalOf(t.goal)?t.goal:'';byGoal[k]=(byGoal[k]||0)+t.amount;}});
-  var start=+S.profile.savingsStart||0,tracked=total;
+  var goalStart=0;S.goals.forEach(function(g){goalStart+=+g.start||0;});
+  var own=+S.profile.savingsStart||0,start=Math.max(own,r2(goalStart)),tracked=total;
   total+=start;
   var pct=st.target>0?Math.min(100,st.saved/st.target*100):0;
   var goals=S.goals.map(function(g){
-    var saved=byGoal[g.id]||0,p=g.target>0?Math.min(100,saved/g.target*100):0,rem=Math.max(0,g.target-saved);
+    var gs=+g.start||0,saved=(byGoal[g.id]||0)+gs,p=g.target>0?Math.min(100,saved/g.target*100):0,rem=Math.max(0,g.target-saved);
     if(ui.editGoal===g.id){
       return '<li class="goal"><form class="stack" data-form="goal-edit" data-id="'+esc(g.id)+'">'+
         '<div class="form-grid"><label class="f">Goal name<input name="name" type="text" value="'+esc(g.name)+'" maxlength="60"></label>'+
-        '<label class="f">Target amount<input name="target" type="number" step="any" min="0" value="'+esc(g.target)+'"></label></div>'+
+        '<label class="f">Target amount<input name="target" type="number" step="any" min="0" value="'+esc(g.target)+'"></label>'+
+        '<label class="f">Saved before tracking<input name="start" type="number" step="any" min="0" value="'+(gs||'')+'" placeholder="0"></label></div>'+
         '<div class="actions"><button class="btn primary sm">Save</button><button type="button" class="btn sm" data-act="goal-cancel">Cancel</button>'+
         '<button type="button" class="btn danger sm" data-act="goal-delete" data-id="'+esc(g.id)+'">Delete goal</button></div></form></li>';
     }
     return '<li class="goal"><div class="goal-head"><h3>'+esc(g.name)+'</h3><span class="amt">'+fmt(saved)+' <span class="muted">of '+fmt(g.target)+'</span></span></div>'+
       '<div class="bar" role="img" aria-label="'+Math.round(p)+'% saved"><i style="width:'+p+'%;background:var(--accent)"></i></div>'+
-      '<p class="sub">'+Math.round(p)+'% · '+(rem>0?fmt(rem)+' to go':'Goal reached')+'</p>'+
+      '<p class="sub">'+Math.round(p)+'% · '+(rem>0?fmt(rem)+' to go':'Goal reached')+(gs>0?' · includes '+fmt(gs)+' from before tracking':'')+'</p>'+
       '<div class="actions"><button type="button" class="btn sm" data-act="add-entry" data-type="saving" data-goal="'+esc(g.id)+'">Add savings</button>'+
       '<button type="button" class="btn sm" data-act="goal-edit" data-id="'+esc(g.id)+'">Edit</button></div></li>';
   }).join('');
@@ -790,13 +792,14 @@ function renderSavings(){
     '<section class="card"><div class="card-head"><h2>Savings before tracking</h2></div>'+
       '<label class="f">Amount you had saved when you started<input type="number" data-bind="p-savestart" value="'+(start||'')+'" step="any" min="0" placeholder="0"></label>'+
       '<dl class="sv-sum"><div><dt>Before tracking</dt><dd>'+fmt(start)+'</dd></div><div><dt>Saved in the app</dt><dd>'+fmt(tracked)+'</dd></div><div class="tot"><dt>Total savings</dt><dd>'+fmt(total)+'</dd></div></dl>'+
-      '<p class="form-hint">Each time you add savings, the total goes up. The amount before tracking does not count toward this month’s target or your goals.</p></section>'+
+      '<p class="form-hint">Each time you add savings, the total goes up. Amounts you set on a goal are counted in the before-tracking figure too, so they are not added twice. None of it counts toward this month’s target.</p></section>'+
     '<div class="grid-2">'+
       '<section class="card"><div class="card-head"><h2>Goals</h2></div>'+
         (goals?'<ul class="plain">'+goals+'</ul>':'<p class="muted">No goals yet. Name something you’re saving for and set a target.</p>')+
         ((byGoal['']||0)>0?'<p class="sub" style="margin-top:12px">Not assigned to a goal: '+fmt(byGoal[''])+'</p>':'')+
         '<form class="form-row" data-form="goal-new" style="margin-top:16px"><input name="name" type="text" maxlength="60" placeholder="New goal, e.g. Laptop" aria-label="Goal name">'+
-        '<input name="target" type="number" step="any" min="0" placeholder="Target" aria-label="Target amount" style="flex:0 1 130px"><button class="btn primary">Add goal</button></form></section>'+
+        '<input name="target" type="number" step="any" min="0" placeholder="Target" aria-label="Target amount" style="flex:0 1 110px">'+
+        '<input name="start" type="number" step="any" min="0" placeholder="Saved already" aria-label="Already saved toward this goal" style="flex:0 1 130px"><button class="btn primary">Add goal</button></form></section>'+
       '<section class="card"><div class="card-head"><h2>Last 6 months</h2></div><div class="chart" id="savingsChart"></div>'+
         '<ul class="chart-key"><li><i class="k-bar"></i>Saved</li><li><i class="k-tgt"></i>Monthly target</li></ul></section>'+
     '</div>';
@@ -1396,13 +1399,15 @@ var FORMS={
   'goal-new':function(f){
     var fd=new FormData(f),name=String(fd.get('name')||'').trim(),target=parseFloat(fd.get('target'));
     if(!name){toast('Give the goal a name.');return;}
-    S.goals.push({id:'g-'+uid(),name:name,target:isFinite(target)&&target>0?r2(target):0});
+    var gst=parseFloat(fd.get('start'));
+    S.goals.push({id:'g-'+uid(),name:name,target:isFinite(target)&&target>0?r2(target):0,start:isFinite(gst)&&gst>0?r2(gst):0});
     save();renderSavings();drawSavings();toast('Goal added');
   },
   'goal-edit':function(f){
     var fd=new FormData(f),g=goalOf(f.dataset.id);
     if(g){var name=String(fd.get('name')||'').trim(),target=parseFloat(fd.get('target'));
-      if(name)g.name=name;g.target=isFinite(target)&&target>0?r2(target):0;}
+      var gst=parseFloat(fd.get('start'));
+      if(name)g.name=name;g.target=isFinite(target)&&target>0?r2(target):0;g.start=isFinite(gst)&&gst>0?r2(gst):0;}
     ui.editGoal=null;save();renderSavings();drawSavings();
   }
 };
